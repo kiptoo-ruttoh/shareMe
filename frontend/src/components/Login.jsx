@@ -2,29 +2,49 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FcGoogle } from 'react-icons/fc';
 import { useGoogleLogin } from '@react-oauth/google';
-import { jwtDecode } from 'jwt-decode';
 
 import shareVideo from '../assets/share.mp4';
 import logo from '../assets/logowhite.png';
+
+import { client } from '../client';
 
 const Login = () => {
   const navigate = useNavigate();
 
   const login = useGoogleLogin({
-    onSuccess: (tokenResponse) => {
-      const decoded = jwtDecode(tokenResponse.credential);
-      localStorage.setItem('user', JSON.stringify(decoded));
+    onSuccess: async (tokenResponse) => {
+      try {
+        // Get user info from Google using the access token
+        const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { 
+            Authorization: `Bearer ${tokenResponse.access_token}`,
+          },
+        });
 
-      // You can use these values if needed later
-      const { name, sub, picture } = decoded;
+        const user = await res.json();
+        localStorage.setItem('user', JSON.stringify(user));
 
-      // Redirect to home after login
-      navigate('/', { replace: true });
+        const { name, sub, picture } = user;
+
+        const doc = {
+          _id: sub,
+          _type: 'user',
+          userName: name,
+          image: picture,
+        };
+
+        // Save to Sanity
+        client.createIfNotExists(doc).then(() => {
+          navigate('/', { replace: true });
+        });
+
+      } catch (error) {
+        console.error('Google login or user info fetch failed:', error);
+      }
     },
     onError: () => {
       console.error('Google login failed');
     },
-    flow: 'implicit',
   });
 
   return (
